@@ -28,15 +28,16 @@ if uploaded_file:
         categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
         project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
 
-        # Apply filtering logic with AND combination and wildcard handling for blanks
+        # Apply filtering logic with AND combination, enforce all criteria unless the rule has a blank (wildcard)
         def matches(row):
             def match(col, selected):
-                if pd.isna(row.get(col)) or str(row[col]).strip() == '':
-                    return True  # treat blank field in data as wildcard (matches anything)
+                rule_val = str(row.get(col, '')).strip()
+                if rule_val == '':
+                    return True  # blank in the row means wildcard
                 if not selected:
-                    return True  # if user selected nothing, don't filter on this field
-                row_values = [x.strip().lower() for x in str(row[col]).split(",")]
-                return any(val.lower() in row_values for val in selected)
+                    return False  # user selected a value but rule has specific non-blank values
+                rule_values = [x.strip().lower() for x in rule_val.split(",")]
+                return any(val.lower() in rule_values for val in selected)
 
             return (
                 match('country', countries) and
