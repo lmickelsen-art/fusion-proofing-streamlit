@@ -27,21 +27,22 @@ if uploaded_file:
         categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
         project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
 
-        # Matching logic
+        # Matching logic based on required AND across selected fields, but row values can wildcard if blank
         def matches(row):
-            def match_field(rule_value, user_values):
-                if pd.isna(rule_value) or str(rule_value).strip() == '':
-                    return True  # wildcard in rule
-                if not user_values:
-                    return True  # user did not filter this field
-                rule_values = [v.strip().lower() for v in str(rule_value).split(",") if v.strip()]
-                return any(user_val.lower() in rule_values for user_val in user_values)
+            def is_match(rule_values, selected_values):
+                if pd.isna(rule_values) or str(rule_values).strip() == '':
+                    return True  # wildcard
+                rule_set = set([val.strip().lower() for val in str(rule_values).split(',') if val.strip()])
+                return bool(rule_set.intersection([v.lower() for v in selected_values]))
 
-            return (
-                match_field(row.get('country', ''), countries) and
-                match_field(row.get('category', ''), categories) and
-                match_field(row.get('project_type', ''), project_types)
-            )
+            # If user selected a filter, row must pass it; if user didn't, ignore that field
+            if countries and not is_match(row.get('country', ''), countries):
+                return False
+            if categories and not is_match(row.get('category', ''), categories):
+                return False
+            if project_types and not is_match(row.get('project_type', ''), project_types):
+                return False
+            return True
 
         filtered = data[data.apply(matches, axis=1)]
 
