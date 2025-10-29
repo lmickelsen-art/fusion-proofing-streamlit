@@ -31,9 +31,9 @@ if uploaded_file:
         def matches(row):
             def field_blocks(row_val, selected_vals):
                 if pd.isna(row_val) or str(row_val).strip() == '':
-                    return False  # rule is blank → wildcard
+                    return False  # rule is wildcard
                 if not selected_vals:
-                    return True  # if user hasn't selected a filter, any non-blank value blocks
+                    return True  # if user hasn't selected a filter, a specific rule blocks
                 rule_values = set(x.strip().lower() for x in str(row_val).split(',') if x.strip())
                 selected_values = set(x.lower() for x in selected_vals)
                 return not rule_values.intersection(selected_values)  # True if rule contradicts the selected
@@ -49,6 +49,18 @@ if uploaded_file:
             return True
 
         filtered = data[data.apply(matches, axis=1)]
+
+        # Define sort order for team priority
+        team_order = ['WIP', 'Content', 'Messaging', 'Management', 'Executive', 'Production']
+
+        def extract_sort_key(team_val):
+            for level in team_order:
+                if level.lower() in str(team_val).lower():
+                    return team_order.index(level)
+            return len(team_order)
+
+        if not filtered.empty:
+            filtered = filtered.sort_values(by='team', key=lambda col: col.map(extract_sort_key))
 
         st.markdown("---")
         st.subheader(f"Matching Assignments ({len(filtered)} found)")
