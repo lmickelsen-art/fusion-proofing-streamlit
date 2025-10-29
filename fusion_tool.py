@@ -17,6 +17,8 @@ if uploaded_file:
         data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
 
         def extract_unique_values(column):
+            if column not in data.columns:
+                return []
             split_values = data[column].dropna().astype(str).str.split(',')
             flat_list = [item.strip() for sublist in split_values for item in sublist]
             return sorted(set(flat_list))
@@ -26,11 +28,13 @@ if uploaded_file:
         categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
         project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
 
-        # Apply filtering logic
+        # Apply filtering logic with AND combination and wildcard handling for blanks
         def matches(row):
             def match(col, selected):
-                if pd.isna(row[col]) or not selected:
-                    return True
+                if pd.isna(row.get(col)) or str(row[col]).strip() == '':
+                    return True  # treat blank field in data as wildcard (matches anything)
+                if not selected:
+                    return True  # if user selected nothing, don't filter on this field
                 row_values = [x.strip().lower() for x in str(row[col]).split(",")]
                 return any(val.lower() in row_values for val in selected)
 
