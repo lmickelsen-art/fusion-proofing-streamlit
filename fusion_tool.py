@@ -16,10 +16,15 @@ if uploaded_file:
         # Clean column names
         data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
 
-        # User input widgets
-        countries = st.multiselect("Select Country Stakeholder(s):", options=sorted(data['country'].dropna().unique()))
-        categories = st.multiselect("Select Category(s):", options=sorted(data['category'].dropna().unique()))
-        project_types = st.multiselect("Select Project Type(s):", options=sorted(data['project_type'].dropna().unique()))
+        def extract_unique_values(column):
+            split_values = data[column].dropna().astype(str).str.split(',')
+            flat_list = [item.strip() for sublist in split_values for item in sublist]
+            return sorted(set(flat_list))
+
+        # User input widgets with true unique value extraction
+        countries = st.multiselect("Select Country Stakeholder(s):", options=extract_unique_values('country'))
+        categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
+        project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
 
         # Apply filtering logic
         def matches(row):
