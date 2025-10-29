@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Fusion Proofing Assignment Tool", layout="centered")
+st.set_page_config(page_title="Fusion Proofing Assignment Tool", layout="wide")
 
 st.title("Fusion Proofing Assignment Tool")
 
@@ -32,7 +32,7 @@ try:
             if pd.isna(row_val) or str(row_val).strip() == '':
                 return False  # blank = wildcard
             if not selected_vals:
-                return True  # rule is non-blank but user didn't select → block
+                return True  # rule is specific, but user didn't select
             rule_values = set(x.strip().lower() for x in str(row_val).split(',') if x.strip())
             selected_values = set(x.lower() for x in selected_vals)
             return not rule_values.intersection(selected_values)
@@ -63,7 +63,10 @@ try:
     st.subheader(f"Matching Assignments ({len(filtered)} found)")
 
     if not filtered.empty:
-        st.dataframe(filtered[['name', 'team']].drop_duplicates().reset_index(drop=True))
+        st.dataframe(
+            filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
+            use_container_width=True
+        )
     else:
         st.warning("No matching assignments found.")
 
