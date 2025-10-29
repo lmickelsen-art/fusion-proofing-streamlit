@@ -25,11 +25,10 @@ try:
     col1, col2 = st.columns([1, 2])
 
     with col1:
-        selected_user = st.selectbox("Or, select a specific user to view their criteria:", [""] + sorted(data['name'].dropna().unique().tolist()))
-        st.markdown("---")
         countries = st.multiselect("Select Country Stakeholder(s):", options=extract_unique_values('country'))
         project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
         categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
+        selected_user = st.selectbox("Or, select a specific user to view their criteria:", [""] + sorted(data['name'].dropna().unique().tolist()))
 
     # Match rules: all non-blank fields in rule must match user input
     def matches(row):
@@ -65,7 +64,19 @@ try:
         filtered = filtered.sort_values(by='team', key=lambda col: col.map(extract_sort_key))
 
     with col2:
+        st.subheader(f"Matching Assignments ({len(filtered)} found)")
+        if not filtered.empty:
+            st.dataframe(
+                filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
+                use_container_width=True,
+                height=600
+            )
+        else:
+            st.warning("No matching assignments found.")
+
+    with col1:
         if selected_user:
+            st.markdown("---")
             st.subheader(f"Criteria for {selected_user}")
             user_row = data[data['name'].str.lower() == selected_user.lower()]
             if not user_row.empty:
@@ -76,17 +87,6 @@ try:
                 st.markdown(f"**Team:** {user_info.get('team', '—')}")
             else:
                 st.warning("User not found.")
-            st.markdown("---")
-
-        st.subheader(f"Matching Assignments ({len(filtered)} found)")
-        if not filtered.empty:
-            st.dataframe(
-                filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
-                use_container_width=True,
-                height=600
-            )
-        else:
-            st.warning("No matching assignments found.")
 
 except Exception as e:
     st.error(f"Failed to load data: {e}")
