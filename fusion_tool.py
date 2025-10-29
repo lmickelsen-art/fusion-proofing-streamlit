@@ -26,8 +26,8 @@ try:
 
     with col1:
         countries = st.multiselect("Select Country Stakeholder(s):", options=extract_unique_values('country'))
-        categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
         project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
+        categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
 
     # Match rules: all non-blank fields in rule must match user input
     def matches(row):
@@ -68,7 +68,7 @@ try:
             st.dataframe(
                 filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
                 use_container_width=True,
-                height=600  # approx. height for ~20 rows
+                height=600
             )
         else:
             st.warning("No matching assignments found.")
