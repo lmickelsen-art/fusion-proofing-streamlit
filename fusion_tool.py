@@ -22,9 +22,12 @@ try:
         flat_list = [item.strip() for sublist in split_values for item in sublist]
         return sorted(set(flat_list))
 
-    countries = st.multiselect("Select Country Stakeholder(s):", options=extract_unique_values('country'))
-    categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
-    project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        countries = st.multiselect("Select Country Stakeholder(s):", options=extract_unique_values('country'))
+        categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
+        project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
 
     # Match rules: all non-blank fields in rule must match user input
     def matches(row):
@@ -59,16 +62,10 @@ try:
     if not filtered.empty:
         filtered = filtered.sort_values(by='team', key=lambda col: col.map(extract_sort_key))
 
-    st.markdown("---")
-    st.subheader(f"Matching Assignments ({len(filtered)} found)")
-
-    if not filtered.empty:
-        st.dataframe(
-            filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
-            use_container_width=True
-        )
-    else:
-        st.warning("No matching assignments found.")
-
-except Exception as e:
-    st.error(f"Failed to load data: {e}")
+    with col2:
+        st.subheader(f"Matching Assignments ({len(filtered)} found)")
+        if not filtered.empty:
+            st.dataframe(
+                filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
+                use_container_width=True
+            )
