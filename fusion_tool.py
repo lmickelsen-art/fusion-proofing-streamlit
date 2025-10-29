@@ -23,26 +23,24 @@ if uploaded_file:
             flat_list = [item.strip() for sublist in split_values for item in sublist]
             return sorted(set(flat_list))
 
-        # User input widgets with true unique value extraction
         countries = st.multiselect("Select Country Stakeholder(s):", options=extract_unique_values('country'))
         categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
         project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
 
-        # Apply filtering logic with AND combination, enforce all criteria unless the rule has a blank (wildcard)
+        # Matching logic
         def matches(row):
-            def match(col, selected):
-                rule_val = str(row.get(col, '')).strip()
-                if rule_val == '':
-                    return True  # blank in the row means wildcard
-                if not selected:
-                    return False  # user selected a value but rule has specific non-blank values
-                rule_values = [x.strip().lower() for x in rule_val.split(",")]
-                return any(val.lower() in rule_values for val in selected)
+            def match_field(rule_value, user_values):
+                if pd.isna(rule_value) or str(rule_value).strip() == '':
+                    return True  # wildcard in rule
+                if not user_values:
+                    return True  # user did not filter this field
+                rule_values = [v.strip().lower() for v in str(rule_value).split(",") if v.strip()]
+                return any(user_val.lower() in rule_values for user_val in user_values)
 
             return (
-                match('country', countries) and
-                match('category', categories) and
-                match('project_type', project_types)
+                match_field(row.get('country', ''), countries) and
+                match_field(row.get('category', ''), categories) and
+                match_field(row.get('project_type', ''), project_types)
             )
 
         filtered = data[data.apply(matches, axis=1)]
