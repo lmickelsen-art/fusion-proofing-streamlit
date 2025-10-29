@@ -27,22 +27,25 @@ if uploaded_file:
         categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
         project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
 
-        # Matching logic based on required AND across selected fields, but row values can wildcard if blank
+        # Improved logic: Only rows that match ALL selected filters
         def matches(row):
-            def is_match(rule_values, selected_values):
-                if pd.isna(rule_values) or str(rule_values).strip() == '':
-                    return True  # wildcard
-                rule_set = set([val.strip().lower() for val in str(rule_values).split(',') if val.strip()])
-                return bool(rule_set.intersection([v.lower() for v in selected_values]))
+            def field_matches(rule_val, selected_vals):
+                if not selected_vals:
+                    return True  # no filtering on this field
+                if pd.isna(rule_val) or str(rule_val).strip() == '':
+                    return False  # field must match, but rule is blank (not eligible)
+                rule_set = set([x.strip().lower() for x in str(rule_val).split(',')])
+                return any(sv.lower() in rule_set for sv in selected_vals)
 
-            # If user selected a filter, row must pass it; if user didn't, ignore that field
-            if countries and not is_match(row.get('country', ''), countries):
-                return False
-            if categories and not is_match(row.get('category', ''), categories):
-                return False
-            if project_types and not is_match(row.get('project_type', ''), project_types):
-                return False
-            return True
+            conditions = []
+            if countries:
+                conditions.append(field_matches(row.get('country', ''), countries))
+            if categories:
+                conditions.append(field_matches(row.get('category', ''), categories))
+            if project_types:
+                conditions.append(field_matches(row.get('project_type', ''), project_types))
+
+            return all(conditions)
 
         filtered = data[data.apply(matches, axis=1)]
 
