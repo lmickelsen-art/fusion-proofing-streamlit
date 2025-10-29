@@ -69,3 +69,8 @@ try:
                 filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
                 use_container_width=True
             )
+        else:
+            st.warning("No matching assignments found.")
+
+except Exception as e:
+    st.error(f"Failed to load data: {e}")
