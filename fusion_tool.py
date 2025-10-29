@@ -67,7 +67,8 @@ try:
         if not filtered.empty:
             st.dataframe(
                 filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
-                use_container_width=True
+                use_container_width=True,
+                height=600  # approx. height for ~20 rows
             )
         else:
             st.warning("No matching assignments found.")
