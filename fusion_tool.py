@@ -77,24 +77,30 @@ def match_country(value: str, selected: list[str]) -> bool:
     return any(s in tokens for s in selected)
 
 
-def match_optional(value: str, selected: list[str]) -> bool:
+def match_constrained(value: str, selected: list[str]) -> bool:
     """
-    Brand, Asset Type, Department are OPTIONAL narrowing filters.
+    Brand, Asset Type, Department are CONSTRAINED fields.
 
     Rules:
-      - If no filters selected -> True
-      - If cell is blank -> wildcard (qualifies for any selection)
-      - Otherwise -> True if any selected token is in the cell list
+      - If the person's cell is BLANK -> wildcard, always True (no constraint).
+      - If the person's cell has values AND filter is selected:
+            -> must intersect with selected.
+      - If the person's cell has values AND filter is NOT selected:
+            -> False (they are constrained but request didn't specify it).
     """
-    if not selected:
-        return True
-
     text = str(value).strip()
+
+    # Person has no constraint for this field → wildcard
     if text == "":
-        # Blank cell = wildcard; does not disqualify this person
         return True
 
     tokens = [t.strip() for t in text.split(",") if t.strip()]
+
+    # Person is constrained, but no filter set → do NOT match
+    if not selected:
+        return False
+
+    # Both sides have values → must intersect
     return any(s in tokens for s in selected)
 
 
@@ -112,9 +118,11 @@ def filter_assignments(
     Apply the assignment rules:
 
       - Country: REQUIRED when countries are selected.
-      - Brand, Asset Type, Department: OPTIONAL.
-        * If filter selected and cell blank -> wildcard (still passes).
-        * If filter selected and cell has values -> must match at least one.
+      - Brand, Asset Type, Department:
+          * If person cell is blank -> wildcard (always ok).
+          * If person cell has values:
+                - If filter selected -> must match at least one.
+                - If filter NOT selected -> person does NOT match.
     """
     filtered = df.copy()
 
@@ -123,19 +131,23 @@ def filter_assignments(
             filtered["Country"].apply(lambda v: match_country(v, countries))
         ]
 
-    if brands:
+    if brands or any(df["Brand"].astype(str).str.strip()):
+        # Only apply brand logic if there is at least some brand data in sheet
         filtered = filtered[
-            filtered["Brand"].apply(lambda v: match_optional(v, brands))
+            filtered["Brand"].apply(lambda v: match_constrained(v, brands))
         ]
 
-    if asset_type:
+    if asset_type or any(df["Asset Type"].astype(str).str.strip()):
+        selected_asset_list = [asset_type] if asset_type else []
         filtered = filtered[
-            filtered["Asset Type"].apply(lambda v: match_optional(v, [asset_type]))
+            filtered["Asset Type"].apply(
+                lambda v: match_constrained(v, selected_asset_list)
+            )
         ]
 
-    if departments:
+    if departments or any(df["Department"].astype(str).str.strip()):
         filtered = filtered[
-            filtered["Department"].apply(lambda v: match_optional(v, departments))
+            filtered["Department"].apply(lambda v: match_constrained(v, departments))
         ]
 
     return filtered
