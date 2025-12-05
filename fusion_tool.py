@@ -57,32 +57,11 @@ def split_unique_tokens(series: pd.Series) -> list[str]:
     return sorted(tokens)
 
 
-def match_country_optional(value: str, selected: list[str]) -> bool:
-    """
-    Country is NOT required.
-
-    Rules:
-      - If no countries selected -> True (country doesn't matter)
-      - If cell is blank -> wildcard, always True (any country qualifies)
-      - Otherwise -> True if any selected country is in the cell list
-    """
-    if not selected:
-        return True
-
-    text = str(value).strip()
-    if text == "":
-        # No country rule for this person => wildcard
-        return True
-
-    tokens = [t.strip() for t in text.split(",") if t.strip()]
-    return any(s in tokens for s in selected)
-
-
 def match_constrained(value: str, selected: list[str]) -> bool:
     """
-    Brand, Asset Type, Department are CONSTRAINED fields.
+    Generic matching for Country, Brand, Asset Type, Department.
 
-    Rules:
+    Rules per field:
       - If the person's cell is BLANK -> wildcard, always True (no constraint).
       - If the person's cell has values AND filter is selected:
             -> must intersect with selected.
@@ -116,13 +95,9 @@ def filter_assignments(
     departments: list[str],
 ) -> pd.DataFrame:
     """
-    Apply the assignment rules:
+    Apply the assignment rules to all 4 dimensions:
 
-      - Country:
-          * Not required; if no filter -> never excludes anyone.
-          * If filter set and person has list -> must match at least one.
-          * If filter set and person has blank country -> wildcard (still matches).
-      - Brand, Asset Type, Department:
+      - Country, Brand, Asset Type, Department:
           * If person cell is blank -> wildcard (always ok).
           * If person cell has values:
                 - If filter selected -> must match at least one.
@@ -130,9 +105,9 @@ def filter_assignments(
     """
     filtered = df.copy()
 
-    # Country: optional constraint
+    # Country
     filtered = filtered[
-        filtered["Country"].apply(lambda v: match_country_optional(v, countries))
+        filtered["Country"].apply(lambda v: match_constrained(v, countries))
     ]
 
     # Brand
@@ -253,7 +228,7 @@ def main():
     all_names = sorted(df["Name"].unique())
 
     if all_names:
-        # selectbox already supports type-ahead: as you type, options narrow
+        # selectbox supports type-ahead: as you type, options narrow
         selected_name = st.selectbox("Select a Name", options=all_names)
 
         person_rows = df[df["Name"] == selected_name]
