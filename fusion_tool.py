@@ -86,6 +86,11 @@ def filter_assignments(
     asset_type: str | None,
     departments: list[str],
 ) -> pd.DataFrame:
+    """
+    Apply the rules:
+      - Country and Asset Type must match selected values (if any),
+      - Brand/Department act as additional filters, but blank cells are wildcards.
+    """
     filtered = df.copy()
 
     if countries:
@@ -176,7 +181,7 @@ def main():
 
     departments = st.sidebar.multiselect("Department", options=all_departments)
 
-    # Filter dataframe for main table
+    # Filter dataframe for main table (this is the "who is assigned" view)
     filtered_df = filter_assignments(
         df=df,
         countries=countries,
@@ -204,24 +209,26 @@ def main():
         )
 
     # ---------------------------------------
-    # Details for a selected user (global)
+    # Details for a selected user (RESPECTS FILTERS)
     # ---------------------------------------
     st.markdown("---")
     st.subheader("Details for a Selected User")
 
-    # Use ALL users, not filtered ones
-    all_names = sorted(df["Name"].unique())
-    if all_names:
-        selected_name = st.selectbox("Select a Name", options=all_names)
+    # Only users who *currently* qualify for the criteria
+    qualifying_df = filtered_df.copy()
 
-        person_rows = df[df["Name"] == selected_name]
+    qualifying_names = sorted(qualifying_df["Name"].unique())
+    if qualifying_names:
+        selected_name = st.selectbox("Select a Name", options=qualifying_names)
+
+        person_rows = qualifying_df[qualifying_df["Name"] == selected_name]
         person_rows = add_proof_stage_sort_key(person_rows).sort_values(
             by=["_proof_stage_rank"], ascending=True
         )
 
         st.markdown(f"Assignments for **{selected_name}**:")
 
-        # Left-aligned bullets (one bullet per line)
+        # Left-aligned bullets (one bullet per line), ordered as requested
         bullet_lines = []
         for _, row in person_rows.iterrows():
             bullet_lines.append(f"- **Country:** {row['Country']}")
@@ -230,15 +237,14 @@ def main():
             bullet_lines.append(f"- **Department:** {row['Department']}")
             bullet_lines.append(f"- **Proof Stage:** {row['Proof Stage']}")
             bullet_lines.append(f"- **Role:** {row['Role']}")
-            # blank line between assignment blocks
-            bullet_lines.append("")
+            bullet_lines.append("")  # blank line between assignment blocks
 
         if bullet_lines:
             st.markdown("\n".join(bullet_lines))
         else:
-            st.info("No assignments found for this user.")
+            st.info("No assignments found for this user with the current criteria.")
     else:
-        st.info("No users available.")
+        st.info("No users qualify for the current criteria.")
 
 
 if __name__ == "__main__":
