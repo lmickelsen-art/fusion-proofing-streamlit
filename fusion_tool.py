@@ -57,19 +57,38 @@ def split_unique_tokens(series: pd.Series) -> list[str]:
     return sorted(tokens)
 
 
-def cell_contains_any(value: str, selected: list[str]) -> bool:
+def match_required(value: str, selected: list[str]) -> bool:
     """
-    Return True if:
-      - no filters selected, OR
-      - the cell is blank (acts as a wildcard), OR
-      - the comma-separated 'value' contains ANY of the selected tokens.
+    For REQUIRED fields (Country, Asset Type):
+      - If no filters selected -> True
+      - If cell is blank and filter has values -> False (must have explicit rule)
+      - Otherwise -> True if any selected token is in the cell list
     """
     if not selected:
         return True
 
     text = str(value).strip()
     if text == "":
-        # Blank cell = wildcard
+        # For required fields, blank means "no rule", so it should NOT match
+        return False
+
+    cell_tokens = [p.strip() for p in text.split(",") if p.strip()]
+    return any(s in cell_tokens for s in selected)
+
+
+def match_wildcard(value: str, selected: list[str]) -> bool:
+    """
+    For OPTIONAL wildcard fields (Brand, Department):
+      - If no filters selected -> True
+      - If cell is blank -> wildcard (qualifies for any selection)
+      - Otherwise -> True if any selected token is in the cell list
+    """
+    if not selected:
+        return True
+
+    text = str(value).strip()
+    if text == "":
+        # Blank cell = wildcard (doesn't restrict assignment)
         return True
 
     cell_tokens = [p.strip() for p in text.split(",") if p.strip()]
@@ -87,30 +106,30 @@ def filter_assignments(
     departments: list[str],
 ) -> pd.DataFrame:
     """
-    Apply the rules:
-      - Country and Asset Type must match selected values (if any),
-      - Brand/Department act as additional filters, but blank cells are wildcards.
+    Rules:
+      - Country and Asset Type are REQUIRED criteria when filters are set.
+      - Brand and Department are OPTIONAL; blank in those cells = wildcard.
     """
     filtered = df.copy()
 
     if countries:
         filtered = filtered[
-            filtered["Country"].apply(lambda v: cell_contains_any(v, countries))
+            filtered["Country"].apply(lambda v: match_required(v, countries))
         ]
 
     if brands:
         filtered = filtered[
-            filtered["Brand"].apply(lambda v: cell_contains_any(v, brands))
+            filtered["Brand"].apply(lambda v: match_wildcard(v, brands))
         ]
 
     if asset_type:
         filtered = filtered[
-            filtered["Asset Type"].apply(lambda v: cell_contains_any(v, [asset_type]))
+            filtered["Asset Type"].apply(lambda v: match_required(v, [asset_type]))
         ]
 
     if departments:
         filtered = filtered[
-            filtered["Department"].apply(lambda v: cell_contains_any(v, departments))
+            filtered["Department"].apply(lambda v: match_wildcard(v, departments))
         ]
 
     return filtered
@@ -214,10 +233,9 @@ def main():
     st.markdown("---")
     st.subheader("Details for a Selected User")
 
-    # Only users who *currently* qualify for the criteria
     qualifying_df = filtered_df.copy()
-
     qualifying_names = sorted(qualifying_df["Name"].unique())
+
     if qualifying_names:
         selected_name = st.selectbox("Select a Name", options=qualifying_names)
 
@@ -228,7 +246,6 @@ def main():
 
         st.markdown(f"Assignments for **{selected_name}**:")
 
-        # Left-aligned bullets (one bullet per line), ordered as requested
         bullet_lines = []
         for _, row in person_rows.iterrows():
             bullet_lines.append(f"- **Country:** {row['Country']}")
@@ -237,7 +254,7 @@ def main():
             bullet_lines.append(f"- **Department:** {row['Department']}")
             bullet_lines.append(f"- **Proof Stage:** {row['Proof Stage']}")
             bullet_lines.append(f"- **Role:** {row['Role']}")
-            bullet_lines.append("")  # blank line between assignment blocks
+            bullet_lines.append("")
 
         if bullet_lines:
             st.markdown("\n".join(bullet_lines))
