@@ -41,37 +41,64 @@ def load_assignments() -> pd.DataFrame:
 
 
 # ==========================
+# HELPERS
+# ==========================
+def split_unique_tokens(series: pd.Series) -> list[str]:
+    """
+    Take a column that may contain comma-separated values and return
+    a sorted list of unique, trimmed tokens.
+    """
+    tokens = set()
+    for val in series.astype(str):
+        for part in val.split(","):
+            part = part.strip()
+            if part:
+                tokens.add(part)
+    return sorted(tokens)
+
+
+def cell_contains_any(value: str, selected: list[str]) -> bool:
+    """
+    Return True if the comma-separated 'value' contains ANY of the
+    selected tokens (after trimming).
+    """
+    if not selected:
+        return True
+    cell_tokens = [p.strip() for p in str(value).split(",")]
+    return any(s in cell_tokens for s in selected)
+
+
+# ==========================
 # FILTERING
 # ==========================
 def filter_assignments(
     df: pd.DataFrame,
-    name_search: str,
     countries: list[str],
     brands: list[str],
     asset_types: list[str],
     departments: list[str],
 ) -> pd.DataFrame:
-    """
-    Note: no Role/Proof Stage filters anymore – per your request.
-    """
     filtered = df.copy()
 
-    # Name search (case-insensitive, partial)
-    if name_search:
-        term = name_search.lower()
-        filtered = filtered[filtered["Name"].str.lower().str.contains(term)]
-
     if countries:
-        filtered = filtered[filtered["Country"].isin(countries)]
+        filtered = filtered[
+            filtered["Country"].apply(lambda v: cell_contains_any(v, countries))
+        ]
 
     if brands:
-        filtered = filtered[filtered["Brand"].isin(brands)]
+        filtered = filtered[
+            filtered["Brand"].apply(lambda v: cell_contains_any(v, brands))
+        ]
 
     if asset_types:
-        filtered = filtered[filtered["Asset Type"].isin(asset_types)]
+        filtered = filtered[
+            filtered["Asset Type"].apply(lambda v: cell_contains_any(v, asset_types))
+        ]
 
     if departments:
-        filtered = filtered[filtered["Department"].isin(departments)]
+        filtered = filtered[
+            filtered["Department"].apply(lambda v: cell_contains_any(v, departments))
+        ]
 
     return filtered
 
@@ -120,37 +147,23 @@ def main():
     # Load data from Google Sheets
     df = load_assignments()
 
-    # Sidebar – filters and search
+    # Sidebar – filters (no name search now)
     st.sidebar.header("Filters")
 
-    # Name search
-    name_search = st.sidebar.text_input("Search by Name")
-
-    # Build filter options from data
-    all_countries = sorted({v.strip() for v in df["Country"].astype(str) if v.strip()})
-    all_brands = sorted({v.strip() for v in df["Brand"].astype(str) if v.strip()})
-
-    # ✅ Fix for Asset Type options: strip + drop blanks, handle as strings
-    all_asset_types = sorted(
-        {v.strip() for v in df["Asset Type"].astype(str) if v.strip()}
-    )
-
-    all_departments = sorted(
-        {v.strip() for v in df["Department"].astype(str) if v.strip()}
-    )
+    # Build dropdown options from comma-separated data
+    all_countries = split_unique_tokens(df["Country"])
+    all_brands = split_unique_tokens(df["Brand"])
+    all_asset_types = split_unique_tokens(df["Asset Type"])
+    all_departments = split_unique_tokens(df["Department"])
 
     countries = st.sidebar.multiselect("Country", options=all_countries)
     brands = st.sidebar.multiselect("Brand", options=all_brands)
     asset_types = st.sidebar.multiselect("Asset Type", options=all_asset_types)
     departments = st.sidebar.multiselect("Department", options=all_departments)
 
-    # ❌ Role and Proof Stage dropdowns removed
-    # (no sidebar controls or filtering on those fields)
-
     # Filter dataframe
     filtered_df = filter_assignments(
         df=df,
-        name_search=name_search,
         countries=countries,
         brands=brands,
         asset_types=asset_types,
@@ -169,17 +182,15 @@ def main():
         st.info("No assignments match the selected criteria.")
         return
 
-    # Show Name, Role, Proof Stage as requested
+    # Show Name, Role, Proof Stage
     display_cols = ["Name", "Role", "Proof Stage"]
-    display_cols = [c for c in display_cols if c in filtered_df.columns]
-
     st.dataframe(
         filtered_df[display_cols].reset_index(drop=True),
         use_container_width=True,
         hide_index=True,
     )
 
-    # Optional: detailed view for one user
+    # Details for a selected user
     st.markdown("---")
     st.subheader("Details for a Selected User")
 
@@ -187,12 +198,9 @@ def main():
     if selected_names:
         selected_name = st.selectbox("Select a Name", options=selected_names)
         person_rows = filtered_df[filtered_df["Name"] == selected_name]
-
-        # Keep the custom sort in the detail view too
         person_rows = add_proof_stage_sort_key(person_rows).sort_values(
             by=["_proof_stage_rank"], ascending=True
         )
-
         st.write(f"All assignments for **{selected_name}**:")
         st.dataframe(
             person_rows.drop(columns=["_proof_stage_rank"], errors="ignore")
