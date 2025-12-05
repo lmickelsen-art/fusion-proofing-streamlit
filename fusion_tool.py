@@ -98,7 +98,7 @@ def filter_assignments(
             filtered["Brand"].apply(lambda v: cell_contains_any(v, brands))
         ]
 
-    if asset_type and asset_type != "All":
+    if asset_type:
         filtered = filtered[
             filtered["Asset Type"].apply(lambda v: cell_contains_any(v, [asset_type]))
         ]
@@ -166,11 +166,12 @@ def main():
     countries = st.sidebar.multiselect("Country", options=all_countries)
     brands = st.sidebar.multiselect("Brand", options=all_brands)
 
-    # Asset Type: single select + All
+    # Asset Type: single select, no "All" option, optional
     asset_type = st.sidebar.selectbox(
         "Asset Type",
-        options=["All"] + all_asset_types,
-        index=0,
+        options=all_asset_types,
+        index=None,
+        placeholder="(optional)",
     )
 
     departments = st.sidebar.multiselect("Department", options=all_departments)
@@ -224,12 +225,12 @@ def main():
         bullet_lines = []
         for _, row in person_rows.iterrows():
             bullet_lines.append(
-                f"- **Proof Stage:** {row['Proof Stage']}  \n"
-                f"  • **Role:** {row['Role']}  \n"
-                f"  • **Country:** {row['Country']}  \n"
+                f"- **Country:** {row['Country']}  \n"
                 f"  • **Brand:** {row['Brand']}  \n"
                 f"  • **Asset Type:** {row['Asset Type']}  \n"
-                f"  • **Department:** {row['Department']}"
+                f"  • **Department:** {row['Department']}  \n"
+                f"  • **Proof Stage:** {row['Proof Stage']}  \n"
+                f"  • **Role:** {row['Role']}"
             )
 
         if bullet_lines:
