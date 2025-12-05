@@ -110,3 +110,165 @@ def filter_assignments(
 ) -> pd.DataFrame:
     """
     Apply the assignment rules:
+
+      - Country: REQUIRED when countries are selected.
+      - Brand, Asset Type, Department: OPTIONAL.
+        * If filter selected and cell blank -> wildcard (still passes).
+        * If filter selected and cell has values -> must match at least one.
+    """
+    filtered = df.copy()
+
+    if countries:
+        filtered = filtered[
+            filtered["Country"].apply(lambda v: match_country(v, countries))
+        ]
+
+    if brands:
+        filtered = filtered[
+            filtered["Brand"].apply(lambda v: match_optional(v, brands))
+        ]
+
+    if asset_type:
+        filtered = filtered[
+            filtered["Asset Type"].apply(lambda v: match_optional(v, [asset_type]))
+        ]
+
+    if departments:
+        filtered = filtered[
+            filtered["Department"].apply(lambda v: match_optional(v, departments))
+        ]
+
+    return filtered
+
+
+# ==========================
+# PROOF STAGE SORT HELPER
+# ==========================
+def add_proof_stage_sort_key(df: pd.DataFrame) -> pd.DataFrame:
+    """Add a column with the custom sort order for Proof Stage."""
+
+    order = [
+        "WIP",
+        "Content Approval",
+        "Messaging Approval",
+        "Management Approval",
+        "Executive Review",
+        "Production Approval",
+    ]
+    order_map = {label.lower(): i for i, label in enumerate(order)}
+
+    def get_stage_rank(stage: str) -> int:
+        text = str(stage).lower()
+        for label, rank in order_map.items():
+            if label in text:
+                return rank
+        # Anything unknown goes to the bottom
+        return len(order)
+
+    df = df.copy()
+    df["_proof_stage_rank"] = df["Proof Stage"].apply(get_stage_rank)
+    return df
+
+
+# ==========================
+# STREAMLIT APP
+# ==========================
+def main():
+    st.set_page_config(
+        page_title="Fusion Proofing Assignments",
+        page_icon="📝",
+        layout="wide",
+    )
+
+    st.title("📝 Fusion Proofing Assignments")
+
+    # Load data from Google Sheets
+    df = load_assignments()
+
+    # Sidebar – filters
+    st.sidebar.header("Filters")
+
+    all_countries = split_unique_tokens(df["Country"])
+    all_brands = split_unique_tokens(df["Brand"])
+    all_asset_types = split_unique_tokens(df["Asset Type"])
+    all_departments = split_unique_tokens(df["Department"])
+
+    countries = st.sidebar.multiselect("Country", options=all_countries)
+    brands = st.sidebar.multiselect("Brand", options=all_brands)
+
+    # Asset Type: single select, optional
+    asset_type = st.sidebar.selectbox(
+        "Asset Type",
+        options=all_asset_types,
+        index=None,
+        placeholder="Single Select",
+    )
+
+    departments = st.sidebar.multiselect("Department", options=all_departments)
+
+    # Filter dataframe for main table (this is the "who is assigned" view)
+    filtered_df = filter_assignments(
+        df=df,
+        countries=countries,
+        brands=brands,
+        asset_type=asset_type,
+        departments=departments,
+    )
+
+    # Apply custom sort order on Proof Stage
+    filtered_df = add_proof_stage_sort_key(filtered_df)
+    filtered_df = filtered_df.sort_values(
+        by=["_proof_stage_rank", "Name"], ascending=[True, True]
+    )
+
+    st.subheader("Proofing Assignments")
+
+    if filtered_df.empty:
+        st.info("No assignments match the selected criteria.")
+    else:
+        display_cols = ["Name", "Role", "Proof Stage"]
+        st.dataframe(
+            filtered_df[display_cols].reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ---------------------------------------
+    # Details for a selected user (RESPECTS FILTERS)
+    # ---------------------------------------
+    st.markdown("---")
+    st.subheader("Details for a Selected User")
+
+    qualifying_df = filtered_df.copy()
+    qualifying_names = sorted(qualifying_df["Name"].unique())
+
+    if qualifying_names:
+        selected_name = st.selectbox("Select a Name", options=qualifying_names)
+
+        person_rows = qualifying_df[qualifying_df["Name"] == selected_name]
+        person_rows = add_proof_stage_sort_key(person_rows).sort_values(
+            by=["_proof_stage_rank"], ascending=True
+        )
+
+        st.markdown(f"Assignments for **{selected_name}**:")
+
+        bullet_lines = []
+        for _, row in person_rows.iterrows():
+            bullet_lines.append(f"- **Country:** {row['Country']}")
+            bullet_lines.append(f"- **Brand:** {row['Brand']}")
+            bullet_lines.append(f"- **Asset Type:** {row['Asset Type']}")
+            bullet_lines.append(f"- **Department:** {row['Department']}")
+            bullet_lines.append(f"- **Proof Stage:** {row['Proof Stage']}")
+            bullet_lines.append(f"- **Role:** {row['Role']}")
+            bullet_lines.append("")  # blank line between assignment blocks
+
+        if bullet_lines:
+            st.markdown("\n".join(bullet_lines))
+        else:
+            st.info("No assignments found for this user with the current criteria.")
+    else:
+        st.info("No users qualify for the current criteria.")
+
+
+if __name__ == "__main__":
+    main()
