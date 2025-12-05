@@ -131,24 +131,21 @@ def filter_assignments(
             filtered["Country"].apply(lambda v: match_country(v, countries))
         ]
 
-    if brands or any(df["Brand"].astype(str).str.strip()):
-        # Only apply brand logic if there is at least some brand data in sheet
-        filtered = filtered[
-            filtered["Brand"].apply(lambda v: match_constrained(v, brands))
-        ]
+    # Brand
+    filtered = filtered[
+        filtered["Brand"].apply(lambda v: match_constrained(v, brands))
+    ]
 
-    if asset_type or any(df["Asset Type"].astype(str).str.strip()):
-        selected_asset_list = [asset_type] if asset_type else []
-        filtered = filtered[
-            filtered["Asset Type"].apply(
-                lambda v: match_constrained(v, selected_asset_list)
-            )
-        ]
+    # Asset Type
+    selected_asset_list = [asset_type] if asset_type else []
+    filtered = filtered[
+        filtered["Asset Type"].apply(lambda v: match_constrained(v, selected_asset_list))
+    ]
 
-    if departments or any(df["Department"].astype(str).str.strip()):
-        filtered = filtered[
-            filtered["Department"].apply(lambda v: match_constrained(v, departments))
-        ]
+    # Department
+    filtered = filtered[
+        filtered["Department"].apply(lambda v: match_constrained(v, departments))
+    ]
 
     return filtered
 
@@ -218,7 +215,7 @@ def main():
 
     departments = st.sidebar.multiselect("Department", options=all_departments)
 
-    # Filter dataframe for main table (this is the "who is assigned" view)
+    # ---------- Main filtered assignments table ----------
     filtered_df = filter_assignments(
         df=df,
         countries=countries,
@@ -227,7 +224,6 @@ def main():
         departments=departments,
     )
 
-    # Apply custom sort order on Proof Stage
     filtered_df = add_proof_stage_sort_key(filtered_df)
     filtered_df = filtered_df.sort_values(
         by=["_proof_stage_rank", "Name"], ascending=[True, True]
@@ -245,19 +241,18 @@ def main():
             hide_index=True,
         )
 
-    # ---------------------------------------
-    # Details for a selected user (RESPECTS FILTERS)
-    # ---------------------------------------
+    # ---------- Details for a selected user (IGNORES FILTERS) ----------
     st.markdown("---")
     st.subheader("Details for a Selected User")
 
-    qualifying_df = filtered_df.copy()
-    qualifying_names = sorted(qualifying_df["Name"].unique())
+    # Use ALL users from the full dataset, not the filtered ones
+    all_names = sorted(df["Name"].unique())
 
-    if qualifying_names:
-        selected_name = st.selectbox("Select a Name", options=qualifying_names)
+    if all_names:
+        # selectbox already supports type-ahead: as you type, options narrow
+        selected_name = st.selectbox("Select a Name", options=all_names)
 
-        person_rows = qualifying_df[qualifying_df["Name"] == selected_name]
+        person_rows = df[df["Name"] == selected_name]
         person_rows = add_proof_stage_sort_key(person_rows).sort_values(
             by=["_proof_stage_rank"], ascending=True
         )
@@ -277,9 +272,9 @@ def main():
         if bullet_lines:
             st.markdown("\n".join(bullet_lines))
         else:
-            st.info("No assignments found for this user with the current criteria.")
+            st.info("No assignments found for this user.")
     else:
-        st.info("No users qualify for the current criteria.")
+        st.info("No users available in the data.")
 
 
 if __name__ == "__main__":
