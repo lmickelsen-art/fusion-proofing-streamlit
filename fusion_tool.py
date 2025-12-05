@@ -8,9 +8,6 @@ import streamlit as st
 def load_assignments() -> pd.DataFrame:
     """
     Loads the proofing assignments directly from your Google Sheet.
-
-    Sheet URL:
-    https://docs.google.com/spreadsheets/d/1K7N24aqjEkDc4pfVm1ArabInI8jhyCI_mCYujHQbrYc/edit?gid=0#gid=0
     """
 
     csv_url = (
@@ -53,9 +50,10 @@ def filter_assignments(
     brands: list[str],
     asset_types: list[str],
     departments: list[str],
-    roles: list[str],
-    proof_stages: list[str],
 ) -> pd.DataFrame:
+    """
+    Note: no Role/Proof Stage filters anymore – per your request.
+    """
     filtered = df.copy()
 
     # Name search (case-insensitive, partial)
@@ -75,13 +73,36 @@ def filter_assignments(
     if departments:
         filtered = filtered[filtered["Department"].isin(departments)]
 
-    if roles:
-        filtered = filtered[filtered["Role"].isin(roles)]
-
-    if proof_stages:
-        filtered = filtered[filtered["Proof Stage"].isin(proof_stages)]
-
     return filtered
+
+
+# ==========================
+# PROOF STAGE SORT HELPER
+# ==========================
+def add_proof_stage_sort_key(df: pd.DataFrame) -> pd.DataFrame:
+    """Add a column with the custom sort order for Proof Stage."""
+
+    order = [
+        "WIP",
+        "Content Approval",
+        "Messaging Approval",
+        "Management Approval",
+        "Executive Review",
+        "Production Approval",
+    ]
+    order_map = {label.lower(): i for i, label in enumerate(order)}
+
+    def get_stage_rank(stage: str) -> int:
+        text = str(stage).lower()
+        for label, rank in order_map.items():
+            if label in text:
+                return rank
+        # Anything unknown goes to the bottom
+        return len(order)
+
+    df = df.copy()
+    df["_proof_stage_rank"] = df["Proof Stage"].apply(get_stage_rank)
+    return df
 
 
 # ==========================
@@ -106,65 +127,28 @@ def main():
     name_search = st.sidebar.text_input("Search by Name")
 
     # Build filter options from data
-    all_countries = sorted([v for v in df["Country"].unique() if v])
-    all_brands = sorted([v for v in df["Brand"].unique() if v])
-    all_asset_types = sorted([v for v in df["Asset Type"].unique() if v])
-    all_departments = sorted([v for v in df["Department"].unique() if v])
-    all_roles = sorted([v for v in df["Role"].unique() if v])
-    all_proof_stages = sorted([v for v in df["Proof Stage"].unique() if v])
+    all_countries = sorted({v.strip() for v in df["Country"].astype(str) if v.strip()})
+    all_brands = sorted({v.strip() for v in df["Brand"].astype(str) if v.strip()})
+
+    # ✅ Fix for Asset Type options: strip + drop blanks, handle as strings
+    all_asset_types = sorted(
+        {v.strip() for v in df["Asset Type"].astype(str) if v.strip()}
+    )
+
+    all_departments = sorted(
+        {v.strip() for v in df["Department"].astype(str) if v.strip()}
+    )
 
     countries = st.sidebar.multiselect("Country", options=all_countries)
     brands = st.sidebar.multiselect("Brand", options=all_brands)
     asset_types = st.sidebar.multiselect("Asset Type", options=all_asset_types)
     departments = st.sidebar.multiselect("Department", options=all_departments)
-    roles = st.sidebar.multiselect("Role", options=all_roles)
-    proof_stages = st.sidebar.multiselect("Proof Stage", options=all_proof_stages)
+
+    # ❌ Role and Proof Stage dropdowns removed
+    # (no sidebar controls or filtering on those fields)
 
     # Filter dataframe
     filtered_df = filter_assignments(
         df=df,
         name_search=name_search,
-        countries=countries,
-        brands=brands,
-        asset_types=asset_types,
-        departments=departments,
-        roles=roles,
-        proof_stages=proof_stages,
-    )
-
-    st.subheader("Proofing Assignments")
-
-    if filtered_df.empty:
-        st.info("No assignments match the selected criteria.")
-        return
-
-    # Show Name, Role, Proof Stage as requested
-    display_cols = ["Name", "Role", "Proof Stage"]
-    display_cols = [c for c in display_cols if c in filtered_df.columns]
-
-    st.dataframe(
-        filtered_df[display_cols].reset_index(drop=True),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    # Optional: detailed view for one user
-    st.markdown("---")
-    st.subheader("Details for a Selected User")
-
-    selected_names = sorted(filtered_df["Name"].unique())
-    if selected_names:
-        selected_name = st.selectbox("Select a Name", options=selected_names)
-        person_rows = filtered_df[filtered_df["Name"] == selected_name]
-        st.write(f"All assignments for **{selected_name}**:")
-        st.dataframe(
-            person_rows.reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info("No users available with the current filters.")
-
-
-if __name__ == "__main__":
-    main()
+        cou
