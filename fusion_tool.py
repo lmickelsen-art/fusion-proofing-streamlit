@@ -1,92 +1,170 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
-st.set_page_config(page_title="Fusion Proofing Assignment Tool", layout="wide")
 
-st.title("Fusion Proofing Assignment Tool")
+# ==========================
+# DATA LOADING
+# ==========================
+def load_assignments() -> pd.DataFrame:
+    """
+    Loads the proofing assignments directly from your Google Sheet.
 
-# Load shared Google Sheet as data source
-sheet_url = "https://docs.google.com/spreadsheets/d/1K7N24aqjEkDc4pfVm1ArabInI8jhyCI_mCYujHQbrYc/export?format=xlsx"
+    Sheet URL:
+    https://docs.google.com/spreadsheets/d/1K7N24aqjEkDc4pfVm1ArabInI8jhyCI_mCYujHQbrYc/edit?gid=0#gid=0
+    """
 
-try:
-    data = pd.read_excel(sheet_url)
-    st.success("Fusion rule data loaded from shared source.")
+    csv_url = (
+        "https://docs.google.com/spreadsheets/d/"
+        "1K7N24aqjEkDc4pfVm1ArabInI8jhyCI_mCYujHQbrYc/"
+        "export?format=csv&gid=0"
+    )
 
-    # Clean column names
-    data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
+    df = pd.read_csv(csv_url)
 
-    def extract_unique_values(column):
-        if column not in data.columns:
-            return []
-        split_values = data[column].dropna().astype(str).str.split(',')
-        flat_list = [item.strip() for sublist in split_values for item in sublist]
-        return sorted(set(flat_list))
+    # Clean up column names just in case
+    df.columns = [c.strip() for c in df.columns]
 
-    col1, col2 = st.columns([1, 2])
+    # Make sure these columns exist and fill blanks
+    required_cols = [
+        "Name",
+        "Country",
+        "Brand",
+        "Asset Type",
+        "Department",
+        "Role",
+        "Proof Stage",
+    ]
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns in data: {missing}")
 
-    with col1:
-        countries = st.multiselect("Select Country Stakeholder(s):", options=extract_unique_values('country'))
-        project_types = st.multiselect("Select Project Type(s):", options=extract_unique_values('project_type'))
-        categories = st.multiselect("Select Category(s):", options=extract_unique_values('category'))
-        selected_user = st.selectbox("Or, select a specific user to view their criteria:", [""] + sorted(data['name'].dropna().unique().tolist()))
+    df = df.fillna("")
 
-    # Match rules: all non-blank fields in rule must match user input
-    def matches(row):
-        def field_blocks(row_val, selected_vals):
-            if pd.isna(row_val) or str(row_val).strip() == '':
-                return False  # blank = wildcard
-            if not selected_vals:
-                return True  # rule is specific, but user didn't select
-            rule_values = set(x.strip().lower() for x in str(row_val).split(',') if x.strip())
-            selected_values = set(x.lower() for x in selected_vals)
-            return not rule_values.intersection(selected_values)
+    return df
 
-        if field_blocks(row.get('country', ''), countries):
-            return False
-        if field_blocks(row.get('category', ''), categories):
-            return False
-        if field_blocks(row.get('project_type', ''), project_types):
-            return False
-        return True
 
-    filtered = data[data.apply(matches, axis=1)]
+# ==========================
+# FILTERING
+# ==========================
+def filter_assignments(
+    df: pd.DataFrame,
+    name_search: str,
+    countries: list[str],
+    brands: list[str],
+    asset_types: list[str],
+    departments: list[str],
+    roles: list[str],
+    proof_stages: list[str],
+) -> pd.DataFrame:
+    filtered = df.copy()
 
-    # Sort by team priority
-    team_order = ['WIP', 'Content', 'Messaging', 'Management', 'Executive', 'Production']
+    # Name search (case-insensitive, partial)
+    if name_search:
+        term = name_search.lower()
+        filtered = filtered[filtered["Name"].str.lower().str.contains(term)]
 
-    def extract_sort_key(team_val):
-        for level in team_order:
-            if level.lower() in str(team_val).lower():
-                return team_order.index(level)
-        return len(team_order)
+    if countries:
+        filtered = filtered[filtered["Country"].isin(countries)]
 
-    if not filtered.empty:
-        filtered = filtered.sort_values(by='team', key=lambda col: col.map(extract_sort_key))
+    if brands:
+        filtered = filtered[filtered["Brand"].isin(brands)]
 
-    with col2:
-        st.subheader(f"Matching Assignments ({len(filtered)} found)")
-        if not filtered.empty:
-            st.dataframe(
-                filtered[['name', 'team']].drop_duplicates().reset_index(drop=True),
-                use_container_width=True,
-                height=600
-            )
-        else:
-            st.warning("No matching assignments found.")
+    if asset_types:
+        filtered = filtered[filtered["Asset Type"].isin(asset_types)]
 
-    with col1:
-        if selected_user:
-            st.markdown("---")
-            st.subheader(f"Criteria for {selected_user}")
-            user_row = data[data['name'].str.lower() == selected_user.lower()]
-            if not user_row.empty:
-                user_info = user_row.iloc[0]
-                st.markdown(f"**Country Stakeholder(s):** {user_info.get('country', '—')}")
-                st.markdown(f"**Category(s):** {user_info.get('category', '—')}")
-                st.markdown(f"**Project Type(s):** {user_info.get('project_type', '—')}")
-                st.markdown(f"**Team:** {user_info.get('team', '—')}")
-            else:
-                st.warning("User not found.")
+    if departments:
+        filtered = filtered[filtered["Department"].isin(departments)]
 
-except Exception as e:
-    st.error(f"Failed to load data: {e}")
+    if roles:
+        filtered = filtered[filtered["Role"].isin(roles)]
+
+    if proof_stages:
+        filtered = filtered[filtered["Proof Stage"].isin(proof_stages)]
+
+    return filtered
+
+
+# ==========================
+# STREAMLIT APP
+# ==========================
+def main():
+    st.set_page_config(
+        page_title="Fusion Proofing Assignments",
+        page_icon="📝",
+        layout="wide",
+    )
+
+    st.title("📝 Fusion Proofing Assignments")
+
+    # Load data from Google Sheets
+    df = load_assignments()
+
+    # Sidebar – filters and search
+    st.sidebar.header("Filters")
+
+    # Name search
+    name_search = st.sidebar.text_input("Search by Name")
+
+    # Build filter options from data
+    all_countries = sorted([v for v in df["Country"].unique() if v])
+    all_brands = sorted([v for v in df["Brand"].unique() if v])
+    all_asset_types = sorted([v for v in df["Asset Type"].unique() if v])
+    all_departments = sorted([v for v in df["Department"].unique() if v])
+    all_roles = sorted([v for v in df["Role"].unique() if v])
+    all_proof_stages = sorted([v for v in df["Proof Stage"].unique() if v])
+
+    countries = st.sidebar.multiselect("Country", options=all_countries)
+    brands = st.sidebar.multiselect("Brand", options=all_brands)
+    asset_types = st.sidebar.multiselect("Asset Type", options=all_asset_types)
+    departments = st.sidebar.multiselect("Department", options=all_departments)
+    roles = st.sidebar.multiselect("Role", options=all_roles)
+    proof_stages = st.sidebar.multiselect("Proof Stage", options=all_proof_stages)
+
+    # Filter dataframe
+    filtered_df = filter_assignments(
+        df=df,
+        name_search=name_search,
+        countries=countries,
+        brands=brands,
+        asset_types=asset_types,
+        departments=departments,
+        roles=roles,
+        proof_stages=proof_stages,
+    )
+
+    st.subheader("Proofing Assignments")
+
+    if filtered_df.empty:
+        st.info("No assignments match the selected criteria.")
+        return
+
+    # Show Name, Role, Proof Stage as requested
+    display_cols = ["Name", "Role", "Proof Stage"]
+    display_cols = [c for c in display_cols if c in filtered_df.columns]
+
+    st.dataframe(
+        filtered_df[display_cols].reset_index(drop=True),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # Optional: detailed view for one user
+    st.markdown("---")
+    st.subheader("Details for a Selected User")
+
+    selected_names = sorted(filtered_df["Name"].unique())
+    if selected_names:
+        selected_name = st.selectbox("Select a Name", options=selected_names)
+        person_rows = filtered_df[filtered_df["Name"] == selected_name]
+        st.write(f"All assignments for **{selected_name}**:")
+        st.dataframe(
+            person_rows.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No users available with the current filters.")
+
+
+if __name__ == "__main__":
+    main()
