@@ -57,13 +57,13 @@ def split_unique_tokens(series: pd.Series) -> list[str]:
     return sorted(tokens)
 
 
-def match_country(value: str, selected: list[str]) -> bool:
+def match_country_optional(value: str, selected: list[str]) -> bool:
     """
-    Country is REQUIRED when filters are set.
+    Country is NOT required.
 
     Rules:
-      - If no countries selected -> True
-      - If cell is blank and filter has values -> False (must have explicit rule)
+      - If no countries selected -> True (country doesn't matter)
+      - If cell is blank -> wildcard, always True (any country qualifies)
       - Otherwise -> True if any selected country is in the cell list
     """
     if not selected:
@@ -71,7 +71,8 @@ def match_country(value: str, selected: list[str]) -> bool:
 
     text = str(value).strip()
     if text == "":
-        return False  # cannot match if no country rule
+        # No country rule for this person => wildcard
+        return True
 
     tokens = [t.strip() for t in text.split(",") if t.strip()]
     return any(s in tokens for s in selected)
@@ -117,7 +118,10 @@ def filter_assignments(
     """
     Apply the assignment rules:
 
-      - Country: REQUIRED when countries are selected.
+      - Country:
+          * Not required; if no filter -> never excludes anyone.
+          * If filter set and person has list -> must match at least one.
+          * If filter set and person has blank country -> wildcard (still matches).
       - Brand, Asset Type, Department:
           * If person cell is blank -> wildcard (always ok).
           * If person cell has values:
@@ -126,17 +130,17 @@ def filter_assignments(
     """
     filtered = df.copy()
 
-    if countries:
-        filtered = filtered[
-            filtered["Country"].apply(lambda v: match_country(v, countries))
-        ]
+    # Country: optional constraint
+    filtered = filtered[
+        filtered["Country"].apply(lambda v: match_country_optional(v, countries))
+    ]
 
     # Brand
     filtered = filtered[
         filtered["Brand"].apply(lambda v: match_constrained(v, brands))
     ]
 
-    # Asset Type
+    # Asset Type (single select)
     selected_asset_list = [asset_type] if asset_type else []
     filtered = filtered[
         filtered["Asset Type"].apply(lambda v: match_constrained(v, selected_asset_list))
