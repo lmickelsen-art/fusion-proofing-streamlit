@@ -64,14 +64,12 @@ def cell_contains_any(value: str, selected: list[str]) -> bool:
       - the cell is blank (acts as a wildcard), OR
       - the comma-separated 'value' contains ANY of the selected tokens.
     """
-    # No filters: everyone passes
     if not selected:
         return True
 
     text = str(value).strip()
-
-    # Blank cell = wildcard (qualifies for any selection)
     if text == "":
+        # Blank cell = wildcard
         return True
 
     cell_tokens = [p.strip() for p in text.split(",") if p.strip()]
@@ -85,7 +83,7 @@ def filter_assignments(
     df: pd.DataFrame,
     countries: list[str],
     brands: list[str],
-    asset_types: list[str],
+    asset_type: str | None,
     departments: list[str],
 ) -> pd.DataFrame:
     filtered = df.copy()
@@ -100,9 +98,9 @@ def filter_assignments(
             filtered["Brand"].apply(lambda v: cell_contains_any(v, brands))
         ]
 
-    if asset_types:
+    if asset_type and asset_type != "All":
         filtered = filtered[
-            filtered["Asset Type"].apply(lambda v: cell_contains_any(v, asset_types))
+            filtered["Asset Type"].apply(lambda v: cell_contains_any(v, [asset_type]))
         ]
 
     if departments:
@@ -157,10 +155,9 @@ def main():
     # Load data from Google Sheets
     df = load_assignments()
 
-    # Sidebar – filters (no name search)
+    # Sidebar – filters
     st.sidebar.header("Filters")
 
-    # Build dropdown options from comma-separated data
     all_countries = split_unique_tokens(df["Country"])
     all_brands = split_unique_tokens(df["Brand"])
     all_asset_types = split_unique_tokens(df["Asset Type"])
@@ -168,15 +165,22 @@ def main():
 
     countries = st.sidebar.multiselect("Country", options=all_countries)
     brands = st.sidebar.multiselect("Brand", options=all_brands)
-    asset_types = st.sidebar.multiselect("Asset Type", options=all_asset_types)
+
+    # Asset Type: single select + All
+    asset_type = st.sidebar.selectbox(
+        "Asset Type",
+        options=["All"] + all_asset_types,
+        index=0,
+    )
+
     departments = st.sidebar.multiselect("Department", options=all_departments)
 
-    # Filter dataframe
+    # Filter dataframe for main table
     filtered_df = filter_assignments(
         df=df,
         countries=countries,
         brands=brands,
-        asset_types=asset_types,
+        asset_type=asset_type,
         departments=departments,
     )
 
@@ -190,36 +194,50 @@ def main():
 
     if filtered_df.empty:
         st.info("No assignments match the selected criteria.")
-        return
-
-    # Show Name, Role, Proof Stage
-    display_cols = ["Name", "Role", "Proof Stage"]
-    st.dataframe(
-        filtered_df[display_cols].reset_index(drop=True),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    # Details for a selected user
-    st.markdown("---")
-    st.subheader("Details for a Selected User")
-
-    selected_names = sorted(filtered_df["Name"].unique())
-    if selected_names:
-        selected_name = st.selectbox("Select a Name", options=selected_names)
-        person_rows = filtered_df[filtered_df["Name"] == selected_name]
-        person_rows = add_proof_stage_sort_key(person_rows).sort_values(
-            by=["_proof_stage_rank"], ascending=True
-        )
-        st.write(f"All assignments for **{selected_name}**:")
+    else:
+        display_cols = ["Name", "Role", "Proof Stage"]
         st.dataframe(
-            person_rows.drop(columns=["_proof_stage_rank"], errors="ignore")
-            .reset_index(drop=True),
+            filtered_df[display_cols].reset_index(drop=True),
             use_container_width=True,
             hide_index=True,
         )
+
+    # ---------------------------------------
+    # Details for a selected user (global)
+    # ---------------------------------------
+    st.markdown("---")
+    st.subheader("Details for a Selected User")
+
+    # Use ALL users, not filtered ones
+    all_names = sorted(df["Name"].unique())
+    if all_names:
+        selected_name = st.selectbox("Select a Name", options=all_names)
+
+        person_rows = df[df["Name"] == selected_name]
+        person_rows = add_proof_stage_sort_key(person_rows).sort_values(
+            by=["_proof_stage_rank"], ascending=True
+        )
+
+        # Bulleted list of assignments
+        st.markdown(f"Assignments for **{selected_name}**:")
+
+        bullet_lines = []
+        for _, row in person_rows.iterrows():
+            bullet_lines.append(
+                f"- **Proof Stage:** {row['Proof Stage']}  \n"
+                f"  • **Role:** {row['Role']}  \n"
+                f"  • **Country:** {row['Country']}  \n"
+                f"  • **Brand:** {row['Brand']}  \n"
+                f"  • **Asset Type:** {row['Asset Type']}  \n"
+                f"  • **Department:** {row['Department']}"
+            )
+
+        if bullet_lines:
+            st.markdown("\n\n".join(bullet_lines))
+        else:
+            st.info("No assignments found for this user.")
     else:
-        st.info("No users available with the current filters.")
+        st.info("No users available.")
 
 
 if __name__ == "__main__":
