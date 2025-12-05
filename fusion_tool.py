@@ -21,7 +21,7 @@ def load_assignments() -> pd.DataFrame:
     # Clean up column names just in case
     df.columns = [c.strip() for c in df.columns]
 
-    # Make sure these columns exist and fill blanks
+    # Ensure required columns and fill blanks
     required_cols = [
         "Name",
         "Country",
@@ -59,12 +59,22 @@ def split_unique_tokens(series: pd.Series) -> list[str]:
 
 def cell_contains_any(value: str, selected: list[str]) -> bool:
     """
-    Return True if the comma-separated 'value' contains ANY of the
-    selected tokens (after trimming).
+    Return True if:
+      - no filters selected, OR
+      - the cell is blank (acts as a wildcard), OR
+      - the comma-separated 'value' contains ANY of the selected tokens.
     """
+    # No filters: everyone passes
     if not selected:
         return True
-    cell_tokens = [p.strip() for p in str(value).split(",")]
+
+    text = str(value).strip()
+
+    # Blank cell = wildcard (qualifies for any selection)
+    if text == "":
+        return True
+
+    cell_tokens = [p.strip() for p in text.split(",") if p.strip()]
     return any(s in cell_tokens for s in selected)
 
 
@@ -147,7 +157,7 @@ def main():
     # Load data from Google Sheets
     df = load_assignments()
 
-    # Sidebar – filters (no name search now)
+    # Sidebar – filters (no name search)
     st.sidebar.header("Filters")
 
     # Build dropdown options from comma-separated data
