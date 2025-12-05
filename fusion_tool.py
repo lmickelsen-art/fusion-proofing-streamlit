@@ -151,4 +151,58 @@ def main():
     filtered_df = filter_assignments(
         df=df,
         name_search=name_search,
-        cou
+        countries=countries,
+        brands=brands,
+        asset_types=asset_types,
+        departments=departments,
+    )
+
+    # Apply custom sort order on Proof Stage
+    filtered_df = add_proof_stage_sort_key(filtered_df)
+    filtered_df = filtered_df.sort_values(
+        by=["_proof_stage_rank", "Name"], ascending=[True, True]
+    )
+
+    st.subheader("Proofing Assignments")
+
+    if filtered_df.empty:
+        st.info("No assignments match the selected criteria.")
+        return
+
+    # Show Name, Role, Proof Stage as requested
+    display_cols = ["Name", "Role", "Proof Stage"]
+    display_cols = [c for c in display_cols if c in filtered_df.columns]
+
+    st.dataframe(
+        filtered_df[display_cols].reset_index(drop=True),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # Optional: detailed view for one user
+    st.markdown("---")
+    st.subheader("Details for a Selected User")
+
+    selected_names = sorted(filtered_df["Name"].unique())
+    if selected_names:
+        selected_name = st.selectbox("Select a Name", options=selected_names)
+        person_rows = filtered_df[filtered_df["Name"] == selected_name]
+
+        # Keep the custom sort in the detail view too
+        person_rows = add_proof_stage_sort_key(person_rows).sort_values(
+            by=["_proof_stage_rank"], ascending=True
+        )
+
+        st.write(f"All assignments for **{selected_name}**:")
+        st.dataframe(
+            person_rows.drop(columns=["_proof_stage_rank"], errors="ignore")
+            .reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No users available with the current filters.")
+
+
+if __name__ == "__main__":
+    main()
