@@ -171,7 +171,7 @@ def main():
         "Asset Type",
         options=all_asset_types,
         index=None,
-        placeholder="(optional)",
+        placeholder="Single Select",
     )
 
     departments = st.sidebar.multiselect("Department", options=all_departments)
@@ -219,22 +219,22 @@ def main():
             by=["_proof_stage_rank"], ascending=True
         )
 
-        # Bulleted list of assignments
         st.markdown(f"Assignments for **{selected_name}**:")
 
+        # Left-aligned bullets (one bullet per line)
         bullet_lines = []
         for _, row in person_rows.iterrows():
-            bullet_lines.append(
-                f"- **Country:** {row['Country']}  \n"
-                f"  • **Brand:** {row['Brand']}  \n"
-                f"  • **Asset Type:** {row['Asset Type']}  \n"
-                f"  • **Department:** {row['Department']}  \n"
-                f"  • **Proof Stage:** {row['Proof Stage']}  \n"
-                f"  • **Role:** {row['Role']}"
-            )
+            bullet_lines.append(f"- **Country:** {row['Country']}")
+            bullet_lines.append(f"- **Brand:** {row['Brand']}")
+            bullet_lines.append(f"- **Asset Type:** {row['Asset Type']}")
+            bullet_lines.append(f"- **Department:** {row['Department']}")
+            bullet_lines.append(f"- **Proof Stage:** {row['Proof Stage']}")
+            bullet_lines.append(f"- **Role:** {row['Role']}")
+            # blank line between assignment blocks
+            bullet_lines.append("")
 
         if bullet_lines:
-            st.markdown("\n\n".join(bullet_lines))
+            st.markdown("\n".join(bullet_lines))
         else:
             st.info("No assignments found for this user.")
     else:
